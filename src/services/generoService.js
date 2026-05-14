@@ -1,7 +1,7 @@
 import api from "./api";
 
 const generoService = {
-    listar: () => api.get("/generos"),
+    listar: () => api.get("/obras/generos"),
 };
 
 export default generoService;

@@ -277,7 +277,7 @@ export default function Biblioteca() {
                                                 <div className="flex flex-wrap gap-1">
                                                     {item.generos?.slice(0, 2).map(g => (
                                                         <span key={g} className="text-xs bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 px-2 py-0.5 rounded-full">
-                                                            {g}
+                                                            {g.replace(/_/g, " ")}
                                                         </span>
                                                     ))}
                                                     {item.generos?.length > 2 && (

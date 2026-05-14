@@ -15,7 +15,7 @@ const getImagem = (imagemUrl) => {
 
 const formVazio = {
     titulo: "", descricao: "", tipo: "MANGA",
-    autor: "", estudio: "", imagemUrl: "", generoIds: []
+    autor: "", estudio: "", imagemUrl: "", generos: []
 }
 
 export default function Obras() {
@@ -30,6 +30,9 @@ export default function Obras() {
     const [salvando, setSalvando] = useState(false)
     const [arquivoImagem, setArquivoImagem] = useState(null)
     const [modalDeletar, setModalDeletar] = useState(null)
+    const [volumesObra, setVolumesObra] = useState([])
+    const [novoVolume, setNovoVolume]   = useState({ numeroVolume: "", isbn: "", dataLancamento: "" })
+    const [quantidadeVolumes, setQuantidadeVolumes] = useState("")
 
     useEffect(() => {
         carregarDados()
@@ -50,27 +53,65 @@ export default function Obras() {
         }
     }
 
+    const abrirEditar = async (obra) => {
+        setEditando(obra)
+        setForm({
+            titulo:    obra.titulo,
+            descricao: obra.descricao,
+            tipo:      obra.tipo,
+            autor:     obra.autor     || "",
+            estudio:   obra.estudio   || "",
+            imagemUrl: obra.imagemUrl || "",
+            generos:   obra.generos   || []
+        })
+        setErro("")
+        setArquivoImagem(null)
+        setModalAberto(true)
+
+        // carrega volumes se for tipo físico
+        if (["LIVRO", "MANGA", "HQ"].includes(obra.tipo)) {
+            try {
+                const res = await obraService.listarVolumes(obra.idObra)
+                setVolumesObra(res.data)
+            } catch {
+                setVolumesObra([])
+            }
+        } else {
+            setVolumesObra([])
+        }
+    }
+
+    const handleAdicionarVolumes = async () => {
+        if (!quantidadeVolumes || !editando) return
+        try {
+            await obraService.criarVolumesLote({
+                obraId:     editando.idObra,
+                quantidade: parseInt(quantidadeVolumes)
+            })
+            const res = await obraService.listarVolumes(editando.idObra)
+            setVolumesObra(res.data)
+            setQuantidadeVolumes("")
+        } catch (err) {
+            setErro(err.response?.data?.erro || "Erro ao adicionar volumes")
+        }
+    }
+
+    const handleDeletarVolume = async (idVolume) => {
+        try {
+            await obraService.deletarVolume(idVolume)
+            setVolumesObra(prev => prev.filter(v => v.idVolume !== idVolume))
+        } catch (err) {
+            setErro(err.response?.data?.erro || "Erro ao deletar volume")
+        }
+    }
+
     const abrirCriar = () => {
         setEditando(null)
         setForm(formVazio)
         setErro("")
         setArquivoImagem(null)
-        setModalAberto(true)
-    }
-
-    const abrirEditar = (obra) => {
-        setEditando(obra)
-        setForm({
-            titulo:     obra.titulo,
-            descricao:  obra.descricao,
-            tipo:       obra.tipo,
-            autor:      obra.autor     || "",
-            estudio:    obra.estudio   || "",
-            imagemUrl:  obra.imagemUrl || "",
-            generoIds:  generos.filter(g => obra.generos?.includes(g.nome)).map(g => g.idGenero)
-        })
-        setErro("")
-        setArquivoImagem(null)
+        setVolumesObra([])
+        setNovoVolume({ numeroVolume: "", isbn: "", dataLancamento: "" })
         setModalAberto(true)
     }
 
@@ -86,12 +127,12 @@ export default function Obras() {
         setForm({ ...form, [e.target.name]: e.target.value })
     }
 
-    const handleGenero = (id) => {
+    const handleGenero = (nome) => {
         setForm(prev => ({
             ...prev,
-            generoIds: prev.generoIds.includes(id)
-                ? prev.generoIds.filter(g => g !== id)
-                : [...prev.generoIds, id]
+            generos: prev.generos.includes(nome)
+                ? prev.generos.filter(g => g !== nome)
+                : [...prev.generos, nome]
         }))
     }
 
@@ -101,20 +142,20 @@ export default function Obras() {
         setSalvando(true)
 
         try {
-            let obraId
-
             if (editando) {
-                const res = await obraService.atualizar(editando.idObra, form)
-                obraId = res.data.idObra
+                await obraService.atualizar(editando.idObra, form)
+                if (arquivoImagem) {
+                    const formData = new FormData()
+                    formData.append("arquivo", arquivoImagem)
+                    await obraService.uploadImagem(editando.idObra, formData)
+                }
             } else {
-                const res = await obraService.criar(form)
-                obraId = res.data.idObra
-            }
-
-            if (arquivoImagem) {
                 const formData = new FormData()
-                formData.append("arquivo", arquivoImagem)
-                await obraService.uploadImagem(obraId, formData)
+                formData.append("dados", new Blob([JSON.stringify(form)], { type: "application/json" }))
+                if (arquivoImagem) {
+                    formData.append("arquivo", arquivoImagem)
+                }
+                await obraService.criarComImagem(formData)
             }
 
             await carregarDados()
@@ -321,20 +362,71 @@ export default function Obras() {
                                         {generos.map(g => (
                                             <button
                                                 type="button"
-                                                key={g.idGenero}
-                                                onClick={() => handleGenero(g.idGenero)}
+                                                key={g}
+                                                onClick={() => handleGenero(g)}
                                                 className={`px-3 py-1 rounded-full text-xs font-medium transition ${
-                                                    form.generoIds.includes(g.idGenero)
+                                                    form.generos.includes(g)
                                                         ? "bg-indigo-600 text-white"
                                                         : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700"
                                                 }`}
                                             >
-                                                {g.nome}
+                                                {g.replace(/_/g, " ")}
                                             </button>
                                         ))}
                                     </div>
                                 </div>
                             )}
+
+                            {(form.tipo === "LIVRO" || form.tipo === "MANGA" || form.tipo === "HQ") && (
+                            <div className="space-y-3">
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    Volumes
+                                </label>
+
+                                {/* Volumes existentes */}
+                                {editando && volumesObra.length > 0 && (
+                                    <div className="flex flex-wrap gap-2">
+                                        {volumesObra.map(v => (
+                                            <div key={v.idVolume} className="flex items-center gap-1 px-2 py-1 rounded-lg bg-gray-100 dark:bg-gray-800">
+                                                <span className="text-xs text-gray-700 dark:text-gray-300">Vol. {v.numeroVolume}</span>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleDeletarVolume(v.idVolume)}
+                                                    className="text-red-400 hover:text-red-600 transition"
+                                                >
+                                                    <X size={12} />
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+
+                                {/* Adicionar volumes em lote */}
+                                {editando ? (
+                                    <div className="flex gap-2">
+                                        <input
+                                            type="number"
+                                            placeholder="Quantos volumes adicionar?"
+                                            value={quantidadeVolumes}
+                                            onChange={(e) => setQuantidadeVolumes(e.target.value)}
+                                            min={1}
+                                            className="flex-1 px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={handleAdicionarVolumes}
+                                            className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm transition"
+                                        >
+                                            Adicionar
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <p className="text-xs text-gray-400 italic">
+                                        Salve a obra primeiro para adicionar volumes.
+                                    </p>
+                                )}
+                            </div>
+                        )}
 
                             {/* Botões */}
                             <div className="flex gap-3 pt-2">
