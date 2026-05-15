@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react"
 import obraService from "../services/obraService"
-import generoService from "../services/generoService"
 import {
     Plus, Pencil, Trash2, BookOpen, Upload, X, Search
 } from "lucide-react"
@@ -15,7 +14,8 @@ const getImagem = (imagemUrl) => {
 
 const formVazio = {
     titulo: "", descricao: "", tipo: "MANGA",
-    autor: "", estudio: "", imagemUrl: "", generos: []
+    autor: "", estudio: "", imagemUrl: "",
+    totalUnidade: 0, generos: []
 }
 
 export default function Obras() {
@@ -31,8 +31,11 @@ export default function Obras() {
     const [arquivoImagem, setArquivoImagem] = useState(null)
     const [modalDeletar, setModalDeletar] = useState(null)
     const [volumesObra, setVolumesObra] = useState([])
-    const [novoVolume, setNovoVolume]   = useState({ numeroVolume: "", isbn: "", dataLancamento: "" })
     const [quantidadeVolumes, setQuantidadeVolumes] = useState("")
+    const [pagina, setPagina] = useState(1)
+    const ITENS_POR_PAGINA = 20
+    const [filtroTipo, setFiltroTipo]     = useState("TODOS")
+    const [filtroGenero, setFiltroGenero] = useState("TODOS")
 
     useEffect(() => {
         carregarDados()
@@ -40,11 +43,11 @@ export default function Obras() {
 
     const carregarDados = async () => {
         try {
-            const [obrasRes, generosRes] = await Promise.all([
-                obraService.listar(),
-                generoService.listar()
-            ])
+            const obrasRes = await obraService.listar()
             setObras(obrasRes.data)
+
+            // carrega gêneros separado
+            const generosRes = await obraService.listarGeneros()
             setGeneros(generosRes.data)
         } catch (err) {
             console.error(err)
@@ -53,29 +56,26 @@ export default function Obras() {
         }
     }
 
-    const abrirEditar = async (obra) => {
+    const abrirEditar = (obra) => {
         setEditando(obra)
         setForm({
-            titulo:    obra.titulo,
-            descricao: obra.descricao,
-            tipo:      obra.tipo,
-            autor:     obra.autor     || "",
-            estudio:   obra.estudio   || "",
-            imagemUrl: obra.imagemUrl || "",
-            generos:   obra.generos   || []
+            titulo:        obra.titulo,
+            descricao:     obra.descricao      || "",
+            tipo:          obra.tipo,
+            autor:         obra.autor          || "",
+            estudio:       obra.estudio        || "",
+            imagemUrl:     obra.imagemUrl      || "",
+            totalUnidade:  obra.totalUnidade   ?? 0,
+            generos:       obra.generos        || []
         })
         setErro("")
         setArquivoImagem(null)
         setModalAberto(true)
 
-        // carrega volumes se for tipo físico
         if (["LIVRO", "MANGA", "HQ"].includes(obra.tipo)) {
-            try {
-                const res = await obraService.listarVolumes(obra.idObra)
-                setVolumesObra(res.data)
-            } catch {
-                setVolumesObra([])
-            }
+            obraService.listarVolumes(obra.idObra)
+                .then(res => setVolumesObra(res.data))
+                .catch(() => setVolumesObra([]))
         } else {
             setVolumesObra([])
         }
@@ -111,7 +111,6 @@ export default function Obras() {
         setErro("")
         setArquivoImagem(null)
         setVolumesObra([])
-        setNovoVolume({ numeroVolume: "", isbn: "", dataLancamento: "" })
         setModalAberto(true)
     }
 
@@ -124,7 +123,8 @@ export default function Obras() {
     }
 
     const handleChange = (e) => {
-        setForm({ ...form, [e.target.name]: e.target.value })
+        const { name, value, type, checked } = e.target
+        setForm({ ...form, [name]: type === "checkbox" ? checked : value })
     }
 
     const handleGenero = (nome) => {
@@ -142,8 +142,13 @@ export default function Obras() {
         setSalvando(true)
 
         try {
+            const dadosForm = {
+                ...form,
+                totalUnidade: parseInt(form.totalUnidade) || 0,
+            }
+
             if (editando) {
-                await obraService.atualizar(editando.idObra, form)
+                await obraService.atualizar(editando.idObra, dadosForm)
                 if (arquivoImagem) {
                     const formData = new FormData()
                     formData.append("arquivo", arquivoImagem)
@@ -151,10 +156,8 @@ export default function Obras() {
                 }
             } else {
                 const formData = new FormData()
-                formData.append("dados", new Blob([JSON.stringify(form)], { type: "application/json" }))
-                if (arquivoImagem) {
-                    formData.append("arquivo", arquivoImagem)
-                }
+                formData.append("dados", new Blob([JSON.stringify(dadosForm)], { type: "application/json" }))
+                if (arquivoImagem) formData.append("arquivo", arquivoImagem)
                 await obraService.criarComImagem(formData)
             }
 
@@ -177,9 +180,23 @@ export default function Obras() {
         }
     }
 
-    const obrasFiltradas = obras.filter(o =>
-        o.titulo.toLowerCase().includes(busca.toLowerCase())
+    const obrasFiltradas = obras.filter(o => {
+        const buscaOk  = o.titulo.toLowerCase().includes(busca.toLowerCase())
+        const tipoOk   = filtroTipo === "TODOS" || o.tipo === filtroTipo
+        const generoOk = filtroGenero === "TODOS" || o.generos?.includes(filtroGenero)
+        return buscaOk && tipoOk && generoOk
+    })
+
+    const totalPaginas = Math.ceil(obrasFiltradas.length / ITENS_POR_PAGINA)
+    const obrasPaginadas = obrasFiltradas.slice(
+        (pagina - 1) * ITENS_POR_PAGINA,
+        pagina * ITENS_POR_PAGINA
     )
+
+    const handleBusca = (e) => {
+        setBusca(e.target.value)
+        setPagina(1)
+    }
 
     if (carregando) return (
         <div className="flex items-center justify-center h-64">
@@ -211,20 +228,71 @@ export default function Obras() {
                     type="text"
                     placeholder="Buscar obra..."
                     value={busca}
-                    onChange={(e) => setBusca(e.target.value)}
+                    onChange={handleBusca}
                     className="w-full pl-9 pr-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
                 />
             </div>
 
+            {/* Filtros */}
+            <div className="flex flex-wrap gap-3">
+                {/* Tipo */}
+                <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs text-gray-500 dark:text-gray-400">Tipo:</span>
+                    {["TODOS", ...TIPOS].map(t => (
+                        <button
+                            key={t}
+                            onClick={() => { setFiltroTipo(t); setPagina(1) }}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${
+                                filtroTipo === t
+                                    ? "bg-indigo-600 text-white"
+                                    : "bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:border-indigo-500"
+                            }`}
+                        >
+                            {t === "TODOS" ? "Todos" : t}
+                        </button>
+                    ))}
+                </div>
+
+                {/* Gênero */}
+                {generos.length > 0 && (
+                    <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xs text-gray-500 dark:text-gray-400">Gênero:</span>
+                        <button
+                            onClick={() => { setFiltroGenero("TODOS"); setPagina(1) }}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${
+                                filtroGenero === "TODOS"
+                                    ? "bg-indigo-600 text-white"
+                                    : "bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:border-indigo-500"
+                            }`}
+                        >
+                            Todos
+                        </button>
+                        {generos.map(g => (
+                            <button
+                                key={g}
+                                onClick={() => { setFiltroGenero(g); setPagina(1) }}
+                                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${
+                                    filtroGenero === g
+                                        ? "bg-indigo-600 text-white"
+                                        : "bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:border-indigo-500"
+                                }`}
+                            >
+                                {g.replace(/_/g, " ")}
+                            </button>
+                        ))}
+                    </div>
+                )}
+            </div>
+
             {/* Grid de obras */}
-            {obrasFiltradas.length === 0 ? (
+            {obrasPaginadas.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-20 text-center">
                     <BookOpen size={48} className="text-gray-300 dark:text-gray-600 mb-4" />
                     <p className="text-gray-500 dark:text-gray-400">Nenhuma obra encontrada.</p>
                 </div>
             ) : (
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-                    {obrasFiltradas.map(obra => (
+                    {obrasPaginadas.map(obra => (
                         <div key={obra.idObra} className="bg-white dark:bg-gray-900 rounded-2xl overflow-hidden shadow-sm border border-gray-100 dark:border-gray-800 group">
                             {/* Imagem */}
                             <div className="relative h-56 bg-gray-100 dark:bg-gray-800">
@@ -279,6 +347,53 @@ export default function Obras() {
                 </div>
             )}
 
+            {/* Paginação */}
+            {totalPaginas > 1 && (
+                <div className="flex items-center justify-center gap-2 mt-4">
+                    <button
+                        onClick={() => setPagina(p => Math.max(1, p - 1))}
+                        disabled={pagina === 1}
+                        className="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-40 transition text-sm"
+                    >
+                        Anterior
+                    </button>
+
+                    {Array.from({ length: totalPaginas }, (_, i) => i + 1)
+                        .filter(p => p === 1 || p === totalPaginas || Math.abs(p - pagina) <= 1)
+                        .reduce((acc, p, idx, arr) => {
+                            if (idx > 0 && p - arr[idx - 1] > 1) acc.push("...")
+                            acc.push(p)
+                            return acc
+                        }, [])
+                        .map((p, idx) =>
+                            p === "..." ? (
+                                <span key={`ellipsis-${idx}`} className="px-2 text-gray-400">...</span>
+                            ) : (
+                                <button
+                                    key={p}
+                                    onClick={() => setPagina(p)}
+                                    className={`w-9 h-9 rounded-lg text-sm font-medium transition ${
+                                        pagina === p
+                                            ? "bg-indigo-600 text-white"
+                                            : "border border-gray-300 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800"
+                                    }`}
+                                >
+                                    {p}
+                                </button>
+                            )
+                        )
+                    }
+
+                    <button
+                        onClick={() => setPagina(p => Math.min(totalPaginas, p + 1))}
+                        disabled={pagina === totalPaginas}
+                        className="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-40 transition text-sm"
+                    >
+                        Próxima
+                    </button>
+                </div>
+            )}
+
             {/* Modal Criar/Editar */}
             {modalAberto && (
                 <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
@@ -316,8 +431,8 @@ export default function Obras() {
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Descrição *</label>
-                                <textarea name="descricao" value={form.descricao} onChange={handleChange} required rows={3}
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Descrição</label>
+                                <textarea name="descricao" value={form.descricao} onChange={handleChange} rows={3}
                                     className="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition resize-none" />
                             </div>
 
@@ -331,6 +446,19 @@ export default function Obras() {
                                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Estúdio</label>
                                     <input name="estudio" value={form.estudio} onChange={handleChange}
                                         className="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition" />
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                        Total de unidades
+                                    </label>
+                                    <input
+                                        type="number" name="totalUnidade"
+                                        value={form.totalUnidade} onChange={handleChange} min={0}
+                                        className="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
+                                    />
                                 </div>
                             </div>
 

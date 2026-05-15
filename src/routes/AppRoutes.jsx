@@ -7,6 +7,8 @@ import Dashboard from "../pages/Dashboard";
 import Obras from "../pages/Obras";
 import Biblioteca from "../pages/Biblioteca";
 import Colecao from "../pages/Colecao";
+import Calendario from "../pages/Calendario"
+import Perfil from "../pages/Perfil"
 
 function PrivateRoute({ children }) {
     const { token } = useAuth();
@@ -30,6 +32,8 @@ export default function AppRoutes() {
                 <Route path="obras" element={<Obras />} />
                 <Route path="biblioteca" element={<Biblioteca />} />
                 <Route path="colecao" element={<Colecao />} />
+                <Route path="calendario" element={<Calendario />} />
+                <Route path="perfil" element={<Perfil />} />
             </Route>
 
             <Route path="*" element={<Navigate to="/" />} />

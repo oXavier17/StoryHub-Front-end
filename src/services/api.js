@@ -14,12 +14,21 @@ api.interceptors.request.use((config) => {
 
 api.interceptors.response.use(
     (response) => response,
+
     (error) => {
-        if (error.response?.status === 401) {
+
+        const url = error.config?.url;
+
+        if (
+            error.response?.status === 401 &&
+            !url.includes("/auth/login")
+        ) {
             localStorage.removeItem("token");
             localStorage.removeItem("usuario");
+
             window.location.href = "/login";
         }
+
         return Promise.reject(error);
     }
 );

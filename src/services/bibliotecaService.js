@@ -6,6 +6,7 @@ const bibliotecaService = {
     criar:     (data)   => api.post("/biblioteca", data),
     atualizar: (id, data) => api.put(`/biblioteca/${id}`, data),
     deletar:   (id)     => api.delete(`/biblioteca/${id}`),
+    incrementar: (id) => api.patch(`/biblioteca/${id}/incrementar`),
 };
 
 export default bibliotecaService;

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react"
 import colecaoService from "../services/colecaoService"
 import obraService from "../services/obraService"
 import volumeService from "../services/volumeService"
+import ObraSearch from "../components/ui/ObraSearch"
 import {
     Plus, Trash2, Pencil, Search, X,
     BookOpen, Package, DollarSign, CheckCircle
@@ -31,6 +32,8 @@ export default function Colecao() {
     const [erro, setErro]               = useState("")
     const [salvando, setSalvando]       = useState(false)
     const [modalDeletar, setModalDeletar] = useState(null)
+    const [filtroPossui, setFiltroPossui] = useState("TODOS")
+    const [filtroLido, setFiltroLido]     = useState("TODOS")
 
     useEffect(() => {
         carregarDados()
@@ -133,9 +136,16 @@ export default function Colecao() {
         }
     }
 
-    const itensFiltrados = itens.filter(i =>
-        i.tituloObra.toLowerCase().includes(busca.toLowerCase())
-    )
+    const itensFiltrados = itens.filter(i => {
+        const buscaOk  = i.tituloObra.toLowerCase().includes(busca.toLowerCase())
+        const possuiOk = filtroPossui === "TODOS" ||
+                        (filtroPossui === "SIM" && i.possui) ||
+                        (filtroPossui === "NAO" && !i.possui)
+        const lidoOk   = filtroLido === "TODOS" ||
+                        (filtroLido === "SIM" && i.lido) ||
+                        (filtroLido === "NAO" && !i.lido)
+        return buscaOk && possuiOk && lidoOk
+    })
 
     const totalGasto = itens
         .filter(i => i.valorPago)
@@ -200,6 +210,43 @@ export default function Colecao() {
                 />
             </div>
 
+            {/* Filtros */}
+            <div className="flex flex-wrap gap-3">
+                <div className="flex items-center gap-2">
+                    <span className="text-xs text-gray-500 dark:text-gray-400">Possui:</span>
+                    {["TODOS", "SIM", "NAO"].map(f => (
+                        <button
+                            key={f}
+                            onClick={() => setFiltroPossui(f)}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${
+                                filtroPossui === f
+                                    ? "bg-indigo-600 text-white"
+                                    : "bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:border-indigo-500"
+                            }`}
+                        >
+                            {f === "TODOS" ? "Todos" : f === "SIM" ? "Sim" : "Não"}
+                        </button>
+                    ))}
+                </div>
+
+                <div className="flex items-center gap-2">
+                    <span className="text-xs text-gray-500 dark:text-gray-400">Lido:</span>
+                    {["TODOS", "SIM", "NAO"].map(f => (
+                        <button
+                            key={f}
+                            onClick={() => setFiltroLido(f)}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${
+                                filtroLido === f
+                                    ? "bg-indigo-600 text-white"
+                                    : "bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:border-indigo-500"
+                            }`}
+                        >
+                            {f === "TODOS" ? "Todos" : f === "SIM" ? "Sim" : "Não"}
+                        </button>
+                    ))}
+                </div>
+            </div>
+
             {/* Tabela */}
             {itensFiltrados.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-20 text-center">
@@ -207,8 +254,8 @@ export default function Colecao() {
                     <p className="text-gray-500 dark:text-gray-400">Nenhum volume na coleção.</p>
                 </div>
             ) : (
-                <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 overflow-hidden shadow-sm">
-                    <div className="overflow-x-auto">
+                <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm">
+                    <div className="overflow-auto max-h-[calc(100vh-380px)]">
                         <table className="w-full">
                             <thead className="border-b border-gray-100 dark:border-gray-800">
                                 <tr>
@@ -339,20 +386,17 @@ export default function Colecao() {
                             {!editando && (
                                 <>
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Obra *</label>
-                                        <select
-                                            value={obraSelecionada}
-                                            onChange={(e) => {
-                                                setObraSelecionada(e.target.value)
-                                                setForm(prev => ({ ...prev, volumeId: "" }))
-                                            }}
-                                            required
-                                            className="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition">
-                                            <option value="">Selecione uma obra</option>
-                                            {obras.map(o => (
-                                                <option key={o.idObra} value={o.idObra}>{o.titulo}</option>
-                                            ))}
-                                        </select>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Obra *</label>
+                                            <ObraSearch
+                                                obras={obras}
+                                                value={obraSelecionada}
+                                                onChange={(id) => {
+                                                    setObraSelecionada(id)
+                                                    setForm(prev => ({ ...prev, volumeId: "" }))
+                                                }}
+                                            />
+                                        </div>
                                     </div>
 
                                     <div>

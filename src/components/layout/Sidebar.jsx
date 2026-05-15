@@ -3,7 +3,7 @@ import { useAuth } from "../../context/AuthContext"
 import { useTheme } from "../../context/ThemeContext"
 import {
     BookOpen, Library, Star, LayoutDashboard,
-    LogOut, Sun, Moon, BookMarked
+    LogOut, Sun, Moon, BookMarked, Calendar, User 
 } from "lucide-react"
 
 const menuItems = [
@@ -11,6 +11,8 @@ const menuItems = [
     { path: "/obras",    label: "Obras",       icon: BookOpen        },
     { path: "/biblioteca", label: "Biblioteca", icon: Library        },
     { path: "/colecao",  label: "Coleção",     icon: Star            },
+    { path: "/calendario", label: "Calendário", icon: Calendar },
+    { path: "/perfil", label: "Perfil", icon: User },
 ]
 
 export default function Sidebar() {
@@ -61,12 +63,30 @@ export default function Sidebar() {
 
                 {/* Usuário */}
                 <div className="flex items-center gap-3 px-4 py-2.5 rounded-lg">
-                    <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-white text-sm font-bold">
-                        {usuario?.nome?.charAt(0).toUpperCase()}
-                    </div>
+
+                    {usuario?.fotoPerfil ? (
+                        <img
+                            src={usuario.fotoPerfil.startsWith("/uploads")
+                                ? `http://localhost:8080${usuario.fotoPerfil}`
+                                : usuario.fotoPerfil
+                            }
+                            alt={usuario.nome}
+                            className="w-8 h-8 rounded-full object-cover"
+                        />
+                    ) : (
+                        <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-white text-sm font-bold">
+                            {usuario?.nome?.charAt(0).toUpperCase()}
+                        </div>
+                    )}
+
                     <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-800 dark:text-white truncate">{usuario?.nome}</p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{usuario?.email}</p>
+                        <p className="text-sm font-medium text-gray-800 dark:text-white truncate">
+                            {usuario?.nome}
+                        </p>
+
+                        <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                            {usuario?.email}
+                        </p>
                     </div>
                 </div>
 

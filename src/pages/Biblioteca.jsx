@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react"
 import bibliotecaService from "../services/bibliotecaService"
 import obraService from "../services/obraService"
+import ObraSearch from "../components/ui/ObraSearch"
+import lancamentoService from "../services/lancamentoService"
 import {
     Plus, Trash2, Pencil, Heart, BookOpen,
-    Search, X, ChevronUp, ChevronDown
+    Search, X, ChevronUp, ChevronDown, PlusCircle 
 } from "lucide-react"
 
 const STATUS_OPTIONS = [
@@ -21,7 +23,25 @@ const getImagem = (imagemUrl) => {
 
 const formVazio = {
     obraId: "", status: "PLANEJO_VER",
-    progressoAtual: 0, totalUnidade: 0, favorito: false
+    progressoAtual: 0, favorito: false,
+    emLancamento: false, nota: ""
+}
+
+function ThCol({ campo, ordenacao, toggleOrdenacao, label }) {
+    return (
+        <th
+            onClick={() => toggleOrdenacao(campo)}
+            className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:text-indigo-500 select-none"
+        >
+            <div className="flex items-center gap-1">
+                {label}
+                {ordenacao.campo === campo
+                    ? ordenacao.asc ? <ChevronUp size={14} /> : <ChevronDown size={14} />
+                    : <ChevronUp size={14} className="opacity-20" />
+                }
+            </div>
+        </th>
+    )
 }
 
 export default function Biblioteca() {
@@ -37,6 +57,10 @@ export default function Biblioteca() {
     const [salvando, setSalvando]     = useState(false)
     const [modalDeletar, setModalDeletar] = useState(null)
     const [ordenacao, setOrdenacao]   = useState({ campo: "tituloObra", asc: true })
+    const [lancamento, setLancamento] = useState({
+        frequencia: "SEMANAL", diaSemana: 1, diaMes: null, horarioLancamento: ""
+    })
+    const [lancamentoExistente, setLancamentoExistente] = useState(null)
 
     useEffect(() => {
         carregarDados()
@@ -64,15 +88,35 @@ export default function Biblioteca() {
         setModalAberto(true)
     }
 
-    const abrirEditar = (item) => {
+    const abrirEditar = async (item) => {
         setEditando(item)
+
         setForm({
-            obraId:        item.obraId,
-            status:        item.status,
+            obraId: item.obraId,
+            status: item.status,
             progressoAtual: item.progressoAtual,
-            totalUnidade:      item.totalUnidade,
-            favorito:      item.favorito
+            favorito: item.favorito,
+            emLancamento: item.emLancamento ?? false,
+            nota: item.nota ?? "",
         })
+
+        if (item.status === "ACOMPANHANDO") {
+            try {
+                const res = await lancamentoService.buscarPorObra(item.obraId)
+
+                setLancamentoExistente(res.data)
+
+                setLancamento({
+                    frequencia: res.data.frequencia || "SEMANAL",
+                    diaSemana: res.data.diaSemana ?? 1,
+                    diaMes: res.data.diaMes ?? null,
+                    horarioLancamento: res.data.horarioLancamento || ""
+                })
+            } catch {
+                setLancamentoExistente(null)
+            }
+        }
+
         setErro("")
         setModalAberto(true)
     }
@@ -82,11 +126,37 @@ export default function Biblioteca() {
         setEditando(null)
         setForm(formVazio)
         setErro("")
+        setLancamentoExistente(null)
+        setLancamento({ frequencia: "SEMANAL", diaSemana: 1, diaMes: null, horarioLancamento: "" })
     }
 
     const handleChange = (e) => {
         const { name, value, type, checked } = e.target
-        setForm({ ...form, [name]: type === "checkbox" ? checked : value })
+        const novoValor = type === "checkbox" ? checked : value
+
+        if (name === "status" && value !== "ACOMPANHANDO") {
+            setForm(prev => ({
+                ...prev,
+                status: value,
+                emLancamento: false,
+                // limpa nota se saiu de COMPLETO/ABANDONADO
+                nota: (value === "PLANEJO_VER" || value === "ACOMPANHANDO") ? "" : prev.nota
+            }))
+            setLancamentoExistente(null)
+            setLancamento({ frequencia: "SEMANAL", diaSemana: 1, diaMes: null, horarioLancamento: "" })
+            return
+        }
+
+        setForm(prev => ({ ...prev, [name]: novoValor }))
+    }
+
+    const handleIncrementar = async (item) => {
+        try {
+            await bibliotecaService.incrementar(item.idBiblioteca)
+            await carregarDados()
+        } catch (err) {
+            console.error(err)
+        }
     }
 
     const handleSalvar = async (e) => {
@@ -94,18 +164,46 @@ export default function Biblioteca() {
         setErro("")
         setSalvando(true)
         try {
+            const obraId = editando ? editando.obraId : parseInt(form.obraId)
+            const obraSelecionada = obras.find(o => o.idObra === obraId)
+            const totalUnidade = obraSelecionada?.totalUnidade ?? 0
+
             const payload = {
-                ...form,
-                obraId:         parseInt(form.obraId),
-                progressoAtual: parseInt(form.progressoAtual),
-                totalUnidade:       parseInt(form.totalUnidade),
+                obraId:         obraId,
+                status:         form.status,
+                progressoAtual: form.status === "COMPLETO"
+                                    ? totalUnidade
+                                    : form.status === "PLANEJO_VER" || form.status === "ABANDONADO"
+                                        ? 0
+                                        : parseInt(form.progressoAtual),
                 favorito:       Boolean(form.favorito),
+                nota: form.nota !== "" ? parseFloat(form.nota) : null,
+                emLancamento:   Boolean(form.emLancamento),
             }
+
             if (editando) {
                 await bibliotecaService.atualizar(editando.idBiblioteca, payload)
             } else {
                 await bibliotecaService.criar(payload)
             }
+
+            // salva lançamento se status for ACOMPANHANDO
+            if (form.status === "ACOMPANHANDO" && form.emLancamento) {
+                const payloadLancamento = {
+                    obraId:           obraId,
+                    frequencia:       lancamento.frequencia,
+                    diaSemana:        lancamento.frequencia === "SEMANAL" ? parseInt(lancamento.diaSemana) : null,
+                    diaMes:           lancamento.frequencia === "MENSAL"  ? parseInt(lancamento.diaMes)   : null,
+                    horarioLancamento: lancamento.horarioLancamento || null
+                }
+
+                if (lancamentoExistente) {
+                    await lancamentoService.atualizar(lancamentoExistente.idLancamento, payloadLancamento)
+                } else {
+                    await lancamentoService.criar(payloadLancamento)
+                }
+            }
+
             await carregarDados()
             fecharModal()
         } catch (err) {
@@ -147,20 +245,9 @@ export default function Biblioteca() {
             return 0
         })
 
-    const ThCol = ({ campo, label }) => (
-        <th
-            onClick={() => toggleOrdenacao(campo)}
-            className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:text-indigo-500 select-none"
-        >
-            <div className="flex items-center gap-1">
-                {label}
-                {ordenacao.campo === campo
-                    ? ordenacao.asc ? <ChevronUp size={14} /> : <ChevronDown size={14} />
-                    : <ChevronUp size={14} className="opacity-20" />
-                }
-            </div>
-        </th>
-    )
+    const obraAtual = editando
+        ? obras.find(o => o.idObra === editando.obraId)
+        : obras.find(o => o.idObra === parseInt(form.obraId))
 
     if (carregando) return (
         <div className="flex items-center justify-center h-64">
@@ -224,17 +311,18 @@ export default function Biblioteca() {
                     <p className="text-gray-500 dark:text-gray-400">Nenhuma obra encontrada.</p>
                 </div>
             ) : (
-                <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 overflow-hidden shadow-sm">
-                    <div className="overflow-x-auto">
+                <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm">
+                    <div className="overflow-auto max-h-[calc(100vh-320px)]">
                         <table className="w-full">
                             <thead className="border-b border-gray-100 dark:border-gray-800">
                                 <tr>
                                     <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider w-12"></th>
-                                    <ThCol campo="tituloObra" label="Obra" />
-                                    <ThCol campo="tipoObra"   label="Tipo" />
+                                    <ThCol campo="tituloObra" label="Obra" ordenacao={ordenacao} toggleOrdenacao={toggleOrdenacao} />
+                                    <ThCol campo="tipoObra"   label="Tipo"      ordenacao={ordenacao} toggleOrdenacao={toggleOrdenacao} />
                                     <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Gêneros</th>
-                                    <ThCol campo="status"     label="Status" />
+                                    <ThCol campo="status"     label="Status"    ordenacao={ordenacao} toggleOrdenacao={toggleOrdenacao} />
                                     <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Progresso</th>
+                                    <ThCol campo="nota"       label="Nota"      ordenacao={ordenacao} toggleOrdenacao={toggleOrdenacao} />
                                     <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider w-10"></th>
                                     <th className="px-4 py-3 w-20"></th>
                                 </tr>
@@ -288,9 +376,16 @@ export default function Biblioteca() {
 
                                             {/* Status */}
                                             <td className="px-4 py-3">
-                                                <span className={`text-xs text-white px-2 py-0.5 rounded-full ${statusOpt?.cor}`}>
-                                                    {statusOpt?.label}
-                                                </span>
+                                                <div className="flex items-center gap-1 flex-wrap">
+                                                    <span className={`text-xs text-white px-2 py-0.5 rounded-full ${statusOpt?.cor}`}>
+                                                        {statusOpt?.label}
+                                                    </span>
+                                                    {item.emLancamento && (
+                                                        <span className="text-xs bg-yellow-100 dark:bg-yellow-900/30 text-yellow-600 dark:text-yellow-400 px-2 py-0.5 rounded-full">
+                                                            Em lançamento
+                                                        </span>
+                                                    )}
+                                                </div>
                                             </td>
 
                                             {/* Progresso */}
@@ -309,6 +404,25 @@ export default function Biblioteca() {
                                                 </div>
                                             </td>
 
+                                            {/* Nota */}
+                                            <td className="px-4 py-3">
+                                                {item.nota != null ? (
+                                                    <span
+                                                        className={`text-sm font-bold ${
+                                                            item.nota >= 8
+                                                                ? "text-green-500"
+                                                                : item.nota >= 6
+                                                                ? "text-yellow-500"
+                                                                : "text-red-500"
+                                                        }`}
+                                                    >
+                                                        {parseFloat(item.nota).toFixed(1)}
+                                                    </span>
+                                                ) : (
+                                                    <span className="text-gray-400 text-xs">—</span>
+                                                )}
+                                            </td>
+
                                             {/* Favorito */}
                                             <td className="px-4 py-3">
                                                 {item.favorito && (
@@ -319,6 +433,16 @@ export default function Biblioteca() {
                                             {/* Ações */}
                                             <td className="px-4 py-3">
                                                 <div className="flex items-center gap-2">
+                                                    {/* Botão +1 — só para ACOMPANHANDO */}
+                                                    {item.status === "ACOMPANHANDO" && (
+                                                        <button
+                                                            onClick={() => handleIncrementar(item)}
+                                                            title="Marcar +1 episódio/capítulo"
+                                                            className="p-1.5 rounded-lg hover:bg-green-100 dark:hover:bg-green-900/30 text-green-500 transition"
+                                                        >
+                                                            <PlusCircle size={15} />
+                                                        </button>
+                                                    )}
                                                     <button
                                                         onClick={() => abrirEditar(item)}
                                                         className="p-1.5 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/30 text-indigo-500 transition"
@@ -355,7 +479,7 @@ export default function Biblioteca() {
                             </button>
                         </div>
 
-                        <form onSubmit={handleSalvar} className="p-5 space-y-4">
+                        <form onSubmit={handleSalvar} className="p-5 space-y-4 max-h-[80vh] overflow-y-auto">
                             {erro && (
                                 <div className="p-3 rounded-lg bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 text-sm">
                                     {erro}
@@ -363,17 +487,16 @@ export default function Biblioteca() {
                             )}
 
                             {/* Obra */}
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Obra *</label>
-                                <select name="obraId" value={form.obraId} onChange={handleChange} required
-                                    disabled={!!editando}
-                                    className="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition disabled:opacity-60">
-                                    <option value="">Selecione uma obra</option>
-                                    {obras.map(o => (
-                                        <option key={o.idObra} value={o.idObra}>{o.titulo}</option>
-                                    ))}
-                                </select>
-                            </div>
+                            {!editando && (
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Obra *</label>
+                                    <ObraSearch
+                                        obras={obras}
+                                        value={form.obraId}
+                                        onChange={(id) => setForm(prev => ({ ...prev, obraId: id }))}
+                                    />
+                                </div>
+                            )}
 
                             {/* Status */}
                             <div>
@@ -386,21 +509,120 @@ export default function Biblioteca() {
                                 </select>
                             </div>
 
-                            {/* Progresso */}
-                            <div className="grid grid-cols-2 gap-3">
+                            {/* Progresso — só para ACOMPANHANDO */}
+                            {form.status === "ACOMPANHANDO" && (
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Progresso atual</label>
-                                    <input type="number" name="progressoAtual" value={form.progressoAtual}
-                                        onChange={handleChange} min={0}
-                                        className="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition" />
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                        Progresso atual
+                                        {obraAtual && obraAtual.totalUnidade > 0 && (
+                                            <span className="text-gray-400 font-normal ml-1">
+                                                (máx. {obraAtual.totalUnidade})
+                                            </span>
+                                        )}
+                                    </label>
+                                    <input
+                                        type="number" name="progressoAtual"
+                                        value={form.progressoAtual}
+                                        onChange={handleChange}
+                                        min={0}
+                                        max={obraAtual?.totalUnidade || undefined}
+                                        className="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
+                                    />
                                 </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Total</label>
-                                    <input type="number" name="totalUnidade" value={form.totalUnidade}
-                                        onChange={handleChange} min={0}
-                                        className="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition" />
+                            )}
+
+                            {/* Seção ACOMPANHANDO — emLancamento + frequência */}
+                            {form.status === "ACOMPANHANDO" && (
+                                <div className="space-y-3 p-3 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
+
+                                    <label className="flex items-center gap-3 cursor-pointer">
+                                        <input
+                                            type="checkbox" name="emLancamento"
+                                            checked={form.emLancamento}
+                                            onChange={handleChange}
+                                            className="w-4 h-4 accent-indigo-600"
+                                        />
+                                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Em lançamento</span>
+                                    </label>
+
+                                    {form.emLancamento && (
+                                        <div className="space-y-3">
+                                            <div>
+                                                <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Frequência</label>
+                                                <select
+                                                    value={lancamento.frequencia}
+                                                    onChange={(e) => setLancamento(prev => ({ ...prev, frequencia: e.target.value }))}
+                                                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
+                                                >
+                                                    <option value="SEMANAL">Semanal</option>
+                                                    <option value="MENSAL">Mensal</option>
+                                                    <option value="DIARIO">Diário</option>
+                                                    <option value="IRREGULAR">Irregular</option>
+                                                </select>
+                                            </div>
+
+                                            {lancamento.frequencia === "SEMANAL" && (
+                                                <div>
+                                                    <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Dia da semana</label>
+                                                    <select
+                                                        value={lancamento.diaSemana}
+                                                        onChange={(e) => setLancamento(prev => ({ ...prev, diaSemana: e.target.value }))}
+                                                        className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
+                                                    >
+                                                        <option value={0}>Domingo</option>
+                                                        <option value={1}>Segunda</option>
+                                                        <option value={2}>Terça</option>
+                                                        <option value={3}>Quarta</option>
+                                                        <option value={4}>Quinta</option>
+                                                        <option value={5}>Sexta</option>
+                                                        <option value={6}>Sábado</option>
+                                                    </select>
+                                                </div>
+                                            )}
+
+                                            {lancamento.frequencia === "MENSAL" && (
+                                                <div>
+                                                    <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Dia do mês</label>
+                                                    <input
+                                                        type="number" min={1} max={31}
+                                                        value={lancamento.diaMes || ""}
+                                                        onChange={(e) => setLancamento(prev => ({ ...prev, diaMes: e.target.value }))}
+                                                        className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
+                                                    />
+                                                </div>
+                                            )}
+
+                                            {lancamento.frequencia !== "IRREGULAR" && (
+                                                <div>
+                                                    <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Horário (opcional)</label>
+                                                    <input
+                                                        type="time"
+                                                        value={lancamento.horarioLancamento}
+                                                        onChange={(e) => setLancamento(prev => ({ ...prev, horarioLancamento: e.target.value }))}
+                                                        className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
+                                                    />
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
                                 </div>
+                            )}
+
+                            {/* Nota */}
+                            {(form.status === "COMPLETO" || form.status === "ABANDONADO") && (
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                    Nota (0 a 10)
+                                </label>
+                                <input
+                                    type="number" name="nota"
+                                    value={form.nota} onChange={handleChange}
+                                    min={0} max={10} step={0.5}
+                                    placeholder="Ex: 8.5"
+                                    className="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
+                                />
                             </div>
+                        )}
 
                             {/* Favorito */}
                             <label className="flex items-center gap-3 cursor-pointer">

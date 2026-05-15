@@ -13,6 +13,7 @@ const obraService = {
         headers: { "Content-Type": "multipart/form-data" }
     }),
     listarVolumes: (id) => api.get(`/volumes/obra/${id}`),
+    listarGeneros: () => api.get("/obras/generos"),
     criarVolume:   (data) => api.post("/volumes", data),
     criarVolumesLote: (data) => api.post("/volumes/lote", data),
     deletarVolume: (id) => api.delete(`/volumes/${id}`),
