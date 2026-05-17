@@ -1,7 +1,7 @@
 import AppRoutes from './routes/AppRoutes'
 
 function App() {
-  return <AppRoutes />
+  <h1>TESTE VERCEL</h1>
 }
 
 export default App
