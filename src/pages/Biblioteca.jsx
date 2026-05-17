@@ -3,6 +3,7 @@ import bibliotecaService from "../services/bibliotecaService"
 import obraService from "../services/obraService"
 import ObraSearch from "../components/ui/ObraSearch"
 import lancamentoService from "../services/lancamentoService"
+import { getImagem } from "../utils/imagem"
 import {
     Plus, Trash2, Pencil, Heart, BookOpen,
     Search, X, ChevronUp, ChevronDown, PlusCircle 
@@ -14,12 +15,6 @@ const STATUS_OPTIONS = [
     { value: "COMPLETO",     label: "Completo",     cor: "bg-green-500" },
     { value: "ABANDONADO",   label: "Abandonado",   cor: "bg-red-500"   },
 ]
-
-const getImagem = (imagemUrl) => {
-    if (!imagemUrl) return "/placeholder.jpg"
-    if (imagemUrl.startsWith("/uploads")) return `http://localhost:8080${imagemUrl}`
-    return imagemUrl
-}
 
 const formVazio = {
     obraId: "", status: "PLANEJO_VER",

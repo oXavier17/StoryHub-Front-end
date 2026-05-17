@@ -2,18 +2,13 @@ import { useEffect, useState } from "react"
 import { useAuth } from "../context/AuthContext"
 import dashboardService from "../services/dashboardService"
 import { BookOpen, BookMarked, CheckCircle, Heart, Clock } from "lucide-react"
+import { getImagem } from "../utils/imagem"
 
 const statusLabel = {
     PLANEJO_VER:  { label: "Planejo Ver",   cor: "bg-gray-400"   },
     ACOMPANHANDO: { label: "Acompanhando",  cor: "bg-blue-500"   },
     COMPLETO:     { label: "Completo",      cor: "bg-green-500"  },
     ABANDONADO:   { label: "Abandonado",    cor: "bg-red-500"    },
-}
-
-const getImagem = (imagemUrl) => {
-    if (!imagemUrl) return "/placeholder.jpg"
-    if (imagemUrl.startsWith("/uploads")) return `http://localhost:8080${imagemUrl}`
-    return imagemUrl
 }
 
 export default function Dashboard() {

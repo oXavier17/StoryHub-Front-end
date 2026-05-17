@@ -1,16 +1,11 @@
 import { useEffect, useState } from "react"
 import obraService from "../services/obraService"
+import { getImagem } from "../utils/imagem"
 import {
     Plus, Pencil, Trash2, BookOpen, Upload, X, Search
 } from "lucide-react"
 
 const TIPOS = ["LIVRO", "MANGA", "HQ", "ANIME", "SERIE", "FILME"]
-
-const getImagem = (imagemUrl) => {
-    if (!imagemUrl) return "/placeholder.jpg"
-    if (imagemUrl.startsWith("/uploads")) return `http://localhost:8080${imagemUrl}`
-    return imagemUrl
-}
 
 const formVazio = {
     titulo: "", descricao: "", tipo: "MANGA",

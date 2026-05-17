@@ -67,9 +67,8 @@ export default function Sidebar() {
                     {usuario?.fotoPerfil ? (
                         <img
                             src={usuario.fotoPerfil.startsWith("/uploads")
-                                ? `http://localhost:8080${usuario.fotoPerfil}`
-                                : usuario.fotoPerfil
-                            }
+                            ? `${import.meta.env.VITE_API_URL}${usuario.fotoPerfil}`
+                            : usuario.fotoPerfil}
                             alt={usuario.nome}
                             className="w-8 h-8 rounded-full object-cover"
                         />

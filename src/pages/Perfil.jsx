@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react"
 import { useAuth } from "../context/AuthContext"
 import perfilService from "../services/perfilService"
+import { getImagem } from "../utils/imagem"
 import { User, Upload, Check, X } from "lucide-react"
 
 const getFoto = (fotoPerfil) => {
     if (!fotoPerfil) return null
-    if (fotoPerfil.startsWith("/uploads")) return `http://localhost:8080${fotoPerfil}`
+    if (fotoPerfil.startsWith("/uploads")) return `${import.meta.env.VITE_API_URL}${fotoPerfil}`
     return fotoPerfil
 }
 

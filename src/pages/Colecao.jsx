@@ -3,6 +3,7 @@ import colecaoService from "../services/colecaoService"
 import obraService from "../services/obraService"
 import volumeService from "../services/volumeService"
 import ObraSearch from "../components/ui/ObraSearch"
+import { getImagem } from "../utils/imagem"
 import {
     Plus, Trash2, Pencil, Search, X,
     BookOpen, Package, DollarSign, CheckCircle

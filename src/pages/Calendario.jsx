@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react"
 import lancamentoService from "../services/lancamentoService"
 import { Calendar, Clock } from "lucide-react"
+import { getImagem } from "../utils/imagem"
 
 const DIAS_SEMANA = [
     { valor: 1, label: "Segunda" },
@@ -11,12 +12,6 @@ const DIAS_SEMANA = [
     { valor: 6, label: "Sábado"  },
     { valor: 0, label: "Domingo" },
 ]
-
-const getImagem = (imagemUrl) => {
-    if (!imagemUrl) return "/placeholder.jpg"
-    if (imagemUrl.startsWith("/uploads")) return `http://localhost:8080${imagemUrl}`
-    return imagemUrl
-}
 
 const getDiaSemanaHoje = () => new Date().getDay()
 
