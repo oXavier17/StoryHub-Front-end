@@ -9,12 +9,6 @@ import {
     BookOpen, Package, DollarSign, CheckCircle
 } from "lucide-react"
 
-const getImagem = (imagemUrl) => {
-    if (!imagemUrl) return "/placeholder.jpg"
-    if (imagemUrl.startsWith("/uploads")) return `http://localhost:8080${imagemUrl}`
-    return imagemUrl
-}
-
 const formVazio = {
     volumeId: "", possui: true, lido: false,
     dataCompra: "", valorPago: ""
