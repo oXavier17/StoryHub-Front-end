@@ -307,7 +307,7 @@ export default function Biblioteca() {
                 </div>
             ) : (
                 <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm">
-                    <div className="overflow-auto max-h-[calc(100vh-320px)]">
+                    <div className="overflow-auto max-h-[calc(100vh-220px)]">
                         <table className="w-full">
                             <thead className="border-b border-gray-100 dark:border-gray-800">
                                 <tr>

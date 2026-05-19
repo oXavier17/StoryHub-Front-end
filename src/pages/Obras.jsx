@@ -324,6 +324,12 @@ export default function Obras() {
                                 <p className="text-xs text-gray-500 dark:text-gray-400 truncate mt-0.5">
                                     {obra.autor || obra.estudio || "—"}
                                 </p>
+                                {obra.totalUnidade > 0 && (
+                                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
+                                        {obra.totalUnidade} {obra.tipo === "ANIME" || obra.tipo === "SERIE" ? "ep." : 
+                                        obra.tipo === "FILME" ? "" : "cap."}
+                                    </p>
+                                )}
                                 {obra.generos?.length > 0 && (
                                     <div className="flex flex-wrap gap-1 mt-2">
                                         {obra.generos.slice(0, 2).map(g => (

@@ -140,37 +140,38 @@ export default function Calendario() {
                     {/* Lista agrupada por dia */}
                     <div className="space-y-4">
                         <h2 className="text-lg font-semibold text-gray-800 dark:text-white">Todos os lançamentos</h2>
+                        <div className="overflow-y-auto max-h-[calc(100vh-420px)] space-y-4 pr-1">
+                            {/* Diários */}
+                            {lancamentosDiarios.length > 0 && (
+                                <LancamentoGrupo titulo="Diário" itens={lancamentosDiarios} cor="bg-purple-500" />
+                            )}
 
-                        {/* Diários */}
-                        {lancamentosDiarios.length > 0 && (
-                            <LancamentoGrupo titulo="Diário" itens={lancamentosDiarios} cor="bg-purple-500" />
-                        )}
+                            {/* Por dia da semana */}
+                            {DIAS_SEMANA.map(dia => {
+                                const itens = lancamentosPorDia(dia.valor)
+                                if (itens.length === 0) return null
+                                const isHoje = dia.valor === getDiaSemanaHoje()
+                                return (
+                                    <LancamentoGrupo
+                                        key={dia.valor}
+                                        titulo={dia.label}
+                                        itens={itens}
+                                        cor="bg-indigo-500"
+                                        destaque={isHoje}
+                                    />
+                                )
+                            })}
 
-                        {/* Por dia da semana */}
-                        {DIAS_SEMANA.map(dia => {
-                            const itens = lancamentosPorDia(dia.valor)
-                            if (itens.length === 0) return null
-                            const isHoje = dia.valor === getDiaSemanaHoje()
-                            return (
-                                <LancamentoGrupo
-                                    key={dia.valor}
-                                    titulo={dia.label}
-                                    itens={itens}
-                                    cor="bg-indigo-500"
-                                    destaque={isHoje}
-                                />
-                            )
-                        })}
+                            {/* Mensais */}
+                            {lancamentosMensais.length > 0 && (
+                                <LancamentoGrupo titulo="Mensal" itens={lancamentosMensais} cor="bg-blue-500" />
+                            )}
 
-                        {/* Mensais */}
-                        {lancamentosMensais.length > 0 && (
-                            <LancamentoGrupo titulo="Mensal" itens={lancamentosMensais} cor="bg-blue-500" />
-                        )}
-
-                        {/* Irregulares */}
-                        {lancamentosIrregulares.length > 0 && (
-                            <LancamentoGrupo titulo="Irregular" itens={lancamentosIrregulares} cor="bg-gray-400" />
-                        )}
+                            {/* Irregulares */}
+                            {lancamentosIrregulares.length > 0 && (
+                                <LancamentoGrupo titulo="Irregular" itens={lancamentosIrregulares} cor="bg-gray-400" />
+                            )}
+                        </div>
                     </div>
                 </>
             )}
