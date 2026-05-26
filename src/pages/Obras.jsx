@@ -4,6 +4,14 @@ import { getImagem } from "../utils/imagem"
 import {
     Plus, Pencil, Trash2, BookOpen, X, Search
 } from "lucide-react"
+import bibliotecaService from "../services/bibliotecaService"
+
+const STATUS_OPTIONS = [
+    { value: "PLANEJO_VER",  label: "Planejo Ver",  cor: "bg-gray-400"  },
+    { value: "ACOMPANHANDO", label: "Acompanhando", cor: "bg-blue-500"  },
+    { value: "COMPLETO",     label: "Completo",     cor: "bg-green-500" },
+    { value: "ABANDONADO",   label: "Abandonado",   cor: "bg-red-500"   },
+]
 
 const TIPOS = ["LIVRO", "MANGA", "HQ", "ANIME", "SERIE", "FILME"]
 
@@ -232,6 +240,27 @@ export default function Obras() {
 
             {/* Filtros */}
             <div className="flex flex-wrap gap-3">
+                <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs text-gray-500 dark:text-gray-400">Biblioteca:</span>
+                    {[
+                        { value: "TODOS",         label: "Todos"           },
+                        { value: "NA_BIBLIOTECA", label: "Na biblioteca"   },
+                        { value: "FORA",          label: "Fora da biblioteca" },
+                    ].map(f => (
+                        <button
+                            key={f.value}
+                            onClick={() => { setFiltroBiblioteca(f.value); setPagina(1) }}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${
+                                filtroBiblioteca === f.value
+                                    ? "bg-indigo-600 text-white"
+                                    : "bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:border-indigo-500"
+                            }`}
+                        >
+                            {f.label}
+                        </button>
+                    ))}
+                </div>
+
                 {/* Tipo */}
                 <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-xs text-gray-500 dark:text-gray-400">Tipo:</span>
@@ -301,6 +330,19 @@ export default function Obras() {
                                 />
                                 {/* Ações no hover */}
                                 <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition flex items-center justify-center gap-2">
+                                    {/* Botão adicionar à biblioteca */}
+                                    {!itensBiblioteca.some(i => i.obraId === obra.idObra) && (
+                                        <button
+                                            onClick={() => {
+                                                setObraParaAdicionar(obra)
+                                                setModalBibliotecaAberto(true)
+                                            }}
+                                            className="p-2 bg-white rounded-lg hover:bg-green-100 transition"
+                                            title="Adicionar à biblioteca"
+                                        >
+                                            <Plus size={16} className="text-green-600" />
+                                        </button>
+                                    )}
                                     <button
                                         onClick={() => abrirEditar(obra)}
                                         className="p-2 bg-white rounded-lg hover:bg-indigo-100 transition"
@@ -558,6 +600,53 @@ export default function Obras() {
                                 </button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal adicionar à biblioteca */}
+            {modalBibliotecaAberto && obraParaAdicionar && (
+                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+                    <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl w-full max-w-sm p-6 space-y-4">
+                        <h2 className="text-lg font-semibold text-gray-800 dark:text-white">
+                            Adicionar à biblioteca
+                        </h2>
+                        <p className="text-gray-500 dark:text-gray-400 text-sm">
+                            Adicionar <span className="font-medium text-gray-700 dark:text-gray-200">"{obraParaAdicionar.titulo}"</span> à sua biblioteca com status inicial:
+                        </p>
+                        <div className="flex flex-col gap-2">
+                            {STATUS_OPTIONS.map(s => (
+                                <button
+                                    key={s.value}
+                                    onClick={async () => {
+                                        try {
+                                            await bibliotecaService.criar({
+                                                obraId:         obraParaAdicionar.idObra,
+                                                status:         s.value,
+                                                progressoAtual: 0,
+                                                favorito:       false,
+                                                emLancamento:   false,
+                                                nota:           null
+                                            })
+                                            await carregarDados()
+                                            setModalBibliotecaAberto(false)
+                                            setObraParaAdicionar(null)
+                                        } catch (err) {
+                                            console.error(err)
+                                        }
+                                    }}
+                                    className={`w-full py-2.5 rounded-lg text-white text-sm font-medium transition hover:opacity-90 ${s.cor}`}
+                                >
+                                    {s.label}
+                                </button>
+                            ))}
+                        </div>
+                        <button
+                            onClick={() => { setModalBibliotecaAberto(false); setObraParaAdicionar(null) }}
+                            className="w-full py-2.5 rounded-lg border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition text-sm font-medium"
+                        >
+                            Cancelar
+                        </button>
                     </div>
                 </div>
             )}
