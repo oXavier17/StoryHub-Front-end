@@ -2,7 +2,7 @@ import { useEffect, useState } from "react"
 import obraService from "../services/obraService"
 import { getImagem } from "../utils/imagem"
 import {
-    Plus, Pencil, Trash2, BookOpen, Upload, X, Search
+    Plus, Pencil, Trash2, BookOpen, X, Search
 } from "lucide-react"
 
 const TIPOS = ["LIVRO", "MANGA", "HQ", "ANIME", "SERIE", "FILME"]
@@ -31,6 +31,10 @@ export default function Obras() {
     const ITENS_POR_PAGINA = 20
     const [filtroTipo, setFiltroTipo]     = useState("TODOS")
     const [filtroGenero, setFiltroGenero] = useState("TODOS")
+    const [filtroBiblioteca, setFiltroBiblioteca] = useState("TODOS")
+    const [modalBibliotecaAberto, setModalBibliotecaAberto] = useState(false)
+    const [obraParaAdicionar, setObraParaAdicionar] = useState(null)
+    const [itensBiblioteca, setItensBiblioteca] = useState([])
 
     useEffect(() => {
         carregarDados()
@@ -38,12 +42,14 @@ export default function Obras() {
 
     const carregarDados = async () => {
         try {
-            const obrasRes = await obraService.listar()
+            const [obrasRes, generosRes, bibRes] = await Promise.all([
+                obraService.listar(),
+                obraService.listarGeneros(),
+                bibliotecaService.listar()
+            ])
             setObras(obrasRes.data)
-
-            // carrega gêneros separado
-            const generosRes = await obraService.listarGeneros()
             setGeneros(generosRes.data)
+            setItensBiblioteca(bibRes.data)
         } catch (err) {
             console.error(err)
         } finally {
@@ -144,16 +150,8 @@ export default function Obras() {
 
             if (editando) {
                 await obraService.atualizar(editando.idObra, dadosForm)
-                if (arquivoImagem) {
-                    const formData = new FormData()
-                    formData.append("arquivo", arquivoImagem)
-                    await obraService.uploadImagem(editando.idObra, formData)
-                }
             } else {
-                const formData = new FormData()
-                formData.append("dados", new Blob([JSON.stringify(dadosForm)], { type: "application/json" }))
-                if (arquivoImagem) formData.append("arquivo", arquivoImagem)
-                await obraService.criarComImagem(formData)
+                await obraService.criar(dadosForm)
             }
 
             await carregarDados()
@@ -176,10 +174,14 @@ export default function Obras() {
     }
 
     const obrasFiltradas = obras.filter(o => {
-        const buscaOk  = o.titulo.toLowerCase().includes(busca.toLowerCase())
-        const tipoOk   = filtroTipo === "TODOS" || o.tipo === filtroTipo
-        const generoOk = filtroGenero === "TODOS" || o.generos?.includes(filtroGenero)
-        return buscaOk && tipoOk && generoOk
+        const buscaOk    = o.titulo.toLowerCase().includes(busca.toLowerCase())
+        const tipoOk     = filtroTipo === "TODOS" || o.tipo === filtroTipo
+        const generoOk   = filtroGenero === "TODOS" || o.generos?.includes(filtroGenero)
+        const naBiblioteca = itensBiblioteca.some(i => i.obraId === o.idObra)
+        const bibOk      = filtroBiblioteca === "TODOS" ||
+                        (filtroBiblioteca === "NA_BIBLIOTECA" && naBiblioteca) ||
+                        (filtroBiblioteca === "FORA" && !naBiblioteca)
+        return buscaOk && tipoOk && generoOk && bibOk
     })
 
     const totalPaginas = Math.ceil(obrasFiltradas.length / ITENS_POR_PAGINA)
@@ -468,19 +470,6 @@ export default function Obras() {
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">URL da Imagem</label>
                                 <input name="imagemUrl" value={form.imagemUrl} onChange={handleChange} placeholder="https://..."
                                     className="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition" />
-                            </div>
-
-                            {/* Upload imagem */}
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Ou envie uma imagem</label>
-                                <label className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-dashed border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 cursor-pointer hover:border-indigo-500 transition">
-                                    <Upload size={16} className="text-gray-400" />
-                                    <span className="text-sm text-gray-500 dark:text-gray-400">
-                                        {arquivoImagem ? arquivoImagem.name : "Clique para selecionar"}
-                                    </span>
-                                    <input type="file" accept="image/*" className="hidden"
-                                        onChange={(e) => setArquivoImagem(e.target.files[0])} />
-                                </label>
                             </div>
 
                             {/* Gêneros */}
